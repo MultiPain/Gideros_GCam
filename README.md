@@ -1,6 +1,16 @@
 # GCam
 A simple 2D camera for Gideros.
 
+# Features
+
+* Dead zone
+* Soft zone
+* Shaking
+* Bounds
+* Smooth object follow
+* Zooming
+* Rotating
+
 # API
 Create camera:
 ```lua
