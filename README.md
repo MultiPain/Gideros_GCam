@@ -47,8 +47,21 @@ Soft zone:
 ```lua
 camera:setSoftZone(w, h) -- w and h in range [0..1] % of camera's size
 ```
+Bounds:
+```lua
+camera:setBounds([left, top, right, bottom]) -- default value is 0 for each
+-- or
+camera:setLeftBound(left)
+camera:seTopBound(top)
+camera:setRightBound(right)
+camera:setBottomBound(bottom)
+```
 
 Movement smoothing:
 ```lua
 camera:setSmooth(x, y)
+```
+Debug graphics:
+```lua
+camera:setDebug(flag)
 ```
