@@ -1,7 +1,7 @@
-#GCam
+# GCam
 A simple 2D camera for Gideros.
 
-#API
+# API
 Create camera:
 ```lua
 camera = GCam.new(yourScene [, anchorX, anchorY]) -- anchor by default is (0.5, 0.5)
