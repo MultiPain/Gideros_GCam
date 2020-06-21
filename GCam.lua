@@ -1,12 +1,70 @@
-local cos,sin,log,random = math.cos,math.sin,math.log,math.random
+local atan2,sqrt,cos,sin,log,random = math.atan2,math.sqrt,math.cos,math.sin,math.log,math.random
+local PI = math.pi
 
 -- ref: 
 -- https://www.gamedev.net/tutorials/programming/general-and-gameplay-programming/a-brief-introduction-to-lerp-r4954/#:~:text=Linear%20interpolation%20(sometimes%20called%20'lerp,0..1%5D%20range.
 local function smoothOver(dt, smoothTime, convergenceFraction) return 1 - (1 - convergenceFraction)^(dt / smoothTime) end
 local function lerp(a,b,t) return a + (b-a) * t end
 local function clamp(v,mn,mx) return (v><mx)<>mn end
+local function map(v, minSrc, maxSrc, minDst, maxDst, clampValue)
+	local newV = (v - minSrc) / (maxSrc - minSrc) * (maxDst - minDst) + minDst
+	return not clampValue and newV or clamp(newV, minDst >< maxDst, minDst <> maxDst)
+end
+local function distance(x1,y1, x2,y2) return (x2-x1)^2 + (y2-y1)^2 end
+local function distanceSq(x1,y1, x2,y2) return sqrt((x2-x1)^2 + (y2-y1)^2) end
+local function angle(x1,y1, x2,y2) return atan2(y2-y1,x2-x1) end
+local function setMeshAsCircle(m, ox, oy, rad_in_x, rad_in_y, rad_out_x, rad_out_y, color, alpha, edges)
+	edges = edges or 16
+	local step = (PI*2)/edges
+	
+	local vi = m:getVertexArraySize() + 1
+	local ii = m:getIndexArraySize() + 1
+	local svi = vi
+	local sii = ii
+	
+	for i = 0, edges-1 do 
+		local ang = i * step
+		local cosa = cos(ang)
+		local sina = sin(ang)
+		
+		local x_in = ox + rad_in_x * cosa
+		local y_in = oy + rad_in_y * sina
+		
+		local x_out = ox + rad_out_x * cosa
+		local y_out = oy + rad_out_y * sina
+		
+		m:setVertex(vi+0,x_in,y_in)
+		m:setVertex(vi+1,x_out,y_out)
+		
+		m:setColor(vi+0,color, alpha)
+		m:setColor(vi+1,color, alpha)
+		
+		vi += 2
+		if i <= edges-2 then
+			local si = (svi-1)+((i+1)*2)-1
+			m:setIndex(ii+0,si)
+			m:setIndex(ii+1,si+1)
+			m:setIndex(ii+2,si+3)
+			m:setIndex(ii+3,si)
+			m:setIndex(ii+4,si+3)
+			m:setIndex(ii+5,si+2)			
+			ii += 6
+		end
+	end
+	local si = (svi-1)+(edges*2)-1
+	m:setIndex(ii+0,si)
+	m:setIndex(ii+1,si+1)
+	m:setIndex(ii+2,svi)
+	
+	m:setIndex(ii+3,si+1)
+	m:setIndex(ii+4,svi+1)
+	m:setIndex(ii+5,svi)
+end
+
+local function outExponential(ratio) if ratio == 1 then return 1 end return 1-2^(-10 * ratio) end
 
 GCam = Core.class(Sprite)
+GCam.SHAKE_DELAY = 10
 
 function GCam:init(content, ax, ay)
 	assert(content ~= stage, "bad argument #1 (сontent should be different from the 'stage')")
@@ -20,14 +78,17 @@ function GCam:init(content, ax, ay)
 	self.viewport:setMatrix(self.matrix)
 	
 	-- 
+	self.w = 0
+	self.h = 0
 	self.ax = ax or 0.5
 	self.ay = ay or 0.5
 	self.x = 0
 	self.y = 0
-	self.w = 0
-	self.h = 0
-	self.factor = 1
+	self.zoomFactor = 1
 	self.rotation = 0
+	
+	self.followOX = 0
+	self.followOY = 0
 	
 	-- Bounds
 	self.leftBound = -1000000
@@ -36,26 +97,47 @@ function GCam:init(content, ax, ay)
 	self.bottomBound = 1000000
 	
 	-- Shaker
-	self.shaking = false
-	self.shakeTime = 0
-	self.shakeAmount = 1
-	self.shakeGrowth = 5
-	self.shakeAmplitude = 10
-	self.shakeFrequency = 100
+	self.shakeTimer = Timer.new(GCam.SHAKE_DELAY, 1)
+	self.shakeDistance = 0
+	self.shakeCount = 0
+	self.shakeAmount = 0
+	self.shakeTimer:addEventListener("timerComplete", self.shakeDone, self)
+	self.shakeTimer:addEventListener("timer", self.shakeUpdate, self)
+	self.shakeTimer:stop()
 	
 	-- Follow
 	-- 0 - instant move
 	self.smoothX = 0.9
 	self.smoothY = 0.9
-	-- Dead zone [0;1]
-	self.deadWidth = 0.5
-	self.deadHeight = 0.5
+	-- Dead zone
+	self.deadWidth = 50
+	self.deadHeight = 50
+	self.deadRadius = 50
 	-- Soft zone
-	self.softWidth = 1
-	self.softHeight = 1
+	self.softWidth = 150
+	self.softHeight = 150
+	self.softRadius = 150
 	
-	self:addEventListener(Event.APPLICATION_RESIZE, self.appResize, self)
-	self:appResize()
+	---------------------------------------
+	------------- debug stuff -------------
+	---------------------------------------
+	self.__debugSoftColor = 0xffff00
+	self.__debugAnchorColor = 0xff0000
+	self.__debugDotColor = 0x00ff00
+	self.__debugAlpha = 0.5
+	
+	self.__debugRMesh = Mesh.new()
+	self.__debugRMesh:setIndexArray(1,3,4, 1,2,4, 1,3,7, 3,5,7, 2,4,8, 4,8,6, 5,6,8, 5,8,7, 9,10,11, 9,11,12, 13,14,15, 13,15,16, 17,18,19, 17,19,20)
+	self.__debugRMesh:setColorArray(self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha,  self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha, self.__debugSoftColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha,  self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha)
+	
+	self.__debugCMesh = Mesh.new()
+	---------------------------------------
+	---------------------------------------
+	---------------------------------------
+	
+	self:setShape("rectangle")	
+	self:setAnchor(self.ax,self.ay)
+	self:updateClip()
 end
 ---------------------------------------------------
 ------------------- DEBUG STUFF -------------------
@@ -64,108 +146,146 @@ function GCam:setDebug(flag)
 	self.__debug__ = flag
 	
 	if flag then 
-		if not self.__debugDeadZoneMesh then 
-			local softColor = 0x00ffff
-			local anchorColor = 0xff0000
-			local dotColor = 0x00ff00
-			local alpha = 0.4
-			
-			self.__debugMesh = Mesh.new()
-			self.__debugMesh:setIndexArray(1,3,4, 1,2,4, 1,3,7, 3,5,7, 2,4,8, 4,8,6, 5,6,8, 5,8,7, 9,10,11, 9,11,12, 13,14,15, 13,15,16, 17,18,19, 17,19,20)
-			self.__debugMesh:setColorArray(
-				softColor,alpha, softColor,alpha, softColor,alpha, softColor,alpha, 
-				softColor,alpha, softColor,alpha, softColor,alpha, softColor,alpha,  
-				
-				anchorColor,alpha, anchorColor,alpha, anchorColor,alpha, anchorColor,alpha, 
-				anchorColor,alpha, anchorColor,alpha, anchorColor,alpha, anchorColor,alpha,
-				
-				dotColor,alpha, dotColor,alpha, dotColor,alpha, dotColor,alpha 
-			)
-			self:addChild(self.__debugMesh)
-		else
-			self:addChild(self.__debugMesh)
-			self:addChild(self.__debugDot)
+		if self.shapeType == "rectangle" then
+			self.__debugCMesh:removeFromParent()
+			self:addChild(self.__debugRMesh)
+		elseif self.shapeType == "circle" then
+			self.__debugRMesh:removeFromParent()
+			self:addChild(self.__debugCMesh)
 		end
 		self:debugUpdate()
 		self:debugUpdate(true, 0, 0)
 	else
-		if self.__debugMesh and self:contains(self.__debugMesh) then 
-			self:removeChild(self.__debugMesh)
-		end
+		self.__debugCMesh:removeFromParent()
+		self.__debugRMesh:removeFromParent()
 	end
 	
 end
 --
+function GCam:switchDebug()
+	self:setDebug(not self.__debug__)
+end
+--
 function GCam:debugMeshUpdate()
 	local w,h = self.w, self.h
-	local sx,sy = self:getScale()
-	local rot = self:getRotation()
+	local zoom = self.zoomFactor
+	local rot = self.rotation
 	
 	local ax,ay = w * self.ax,h * self.ay
 	
-	local dw = (self.deadWidth * w * sx) / 2
-	local dh = (self.deadHeight * h * sy) / 2
-	local sw = (self.softWidth * w * sx) / 2
-	local sh = (self.softHeight * h * sy) / 2
-	
-	local l = (w-dw) * self.ax
-	local r = w-dw-l
-	local t = (h-dh) * self.ay
-	local b = h-dh-t
 	local TS = 1
-	
-	--[[
-	Mesh vertices
-	
-	1-----------------2
-	| \  soft zone  / |
-	|  3-----------4  |
-	|  | dead zone |  |
-	|  5-----------6  |
-	| /             \ |
-	7-----------------8
-	]]	
 	local off = w <> h
-	self.__debugMesh:setVertexArray(
-		ax-sw,ay-sh, 
-		ax+sw,ay-sh,
+	
+	if self.shapeType == "rectangle" then
+		local dw = (self.deadWidth  * zoom) / 2
+		local dh = (self.deadHeight * zoom) / 2
+		local sw = (self.softWidth  * zoom) / 2
+		local sh = (self.softHeight * zoom) / 2
+		--[[
+		Mesh vertices
 		
-		ax-dw,ay-dh,
-		ax+dw,ay-dh,
-		ax-dw,ay+dh,
-		ax+dw,ay+dh,
+		1-----------------2
+		| \  soft zone  / |
+		|  3-----------4  |
+		|  | dead zone |  |
+		|  5-----------6  |
+		| /             \ |
+		7-----------------8
+		]]	
 		
-		ax-sw,ay+sh,
-		ax+sw,ay+sh,
+		self.__debugRMesh:setVertexArray(
+			ax-sw,ay-sh, 
+			ax+sw,ay-sh,
+			
+			ax-dw,ay-dh,
+			ax+dw,ay-dh,
+			ax-dw,ay+dh,
+			ax+dw,ay+dh,
+			
+			ax-sw,ay+sh,
+			ax+sw,ay+sh,
+			
+			ax-TS,-off, ax+TS,-off,
+			ax+TS,h+off, ax-TS,h+off,
+			
+			-off,ay-TS, -off,ay+TS,
+			w+off,ay+TS, w+off,ay-TS
+		)
+		self.__debugRMesh:setAnchorPosition(ax,ay)
+		self.__debugRMesh:setPosition(ax,ay)
+		self.__debugRMesh:setRotation(rot)
+	elseif self.shapeType == "circle" then
+		--[[
+		Mesh:
 		
-		ax-TS,-off, ax+TS,-off,
-		ax+TS,h+off, ax-TS,h+off,
+		-- first 4 vertex is green target point
+		1--2
+		|  |
+		4--3
 		
-		-off,ay-TS, -off,ay+TS,
-		w+off,ay+TS, w+off,ay-TS
-	)
-	self.__debugMesh:setAnchorPosition(ax,ay)
-	self.__debugMesh:setPosition(ax,ay)
-	self.__debugMesh:setRotation(rot)
+		next, vertical anchor line
+		5--6
+		|  |
+		|  |
+		|  |
+		8--7
+		next, horizontal anchor line
+		9--------10
+		|         |
+		12-------11
+		and finaly, circle 
+		
+		8 edges "circle" look like this:
+		
+		 24--------------26--------------28 
+		 | \   soft zone  |             / |
+		 |  23-----------25-----------27  |
+		 |  |                         |   |
+		 |  |           dead          |   |
+		22--21          zone         13--14
+		 |  |                         |   |
+		 |  |                         |   |
+		 |  19-----------17-----------15  |
+		 | /              |             \ |
+		 20--------------18--------------16
+		]]
+		local dr = self.deadRadius * zoom
+		local sr = self.softRadius * zoom
+		
+		self.__debugCMesh:setVertexArray(0,0,0,0,0,0,0,0,ax-TS,-off, ax+TS,-off,ax+TS,h+off, ax-TS,h+off, -off,ay-TS, -off,ay+TS, w+off,ay+TS, w+off,ay-TS)
+		self.__debugCMesh:setIndexArray(1,2,3, 1,3,4, 5,6,7, 5,7,8, 9,10,11, 9,11,12)
+		self.__debugCMesh:setColorArray(self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugDotColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha, self.__debugAnchorColor,self.__debugAlpha)
+		
+		setMeshAsCircle(self.__debugCMesh, ax,ay, dr, dr, sr, sr, self.__debugSoftColor,self.__debugAlpha, 32)
+		
+		self.__debugCMesh:setAnchorPosition(ax,ay)
+		self.__debugCMesh:setPosition(ax,ay)
+		self.__debugCMesh:setRotation(rot)
+	end
 	
 end
 --
 function GCam:debugUpdate(dotOnly, gx,gy)
 	if self.__debug__ then 
 		if dotOnly then 
-			local sx,sy = self:getScale()
+			local zoom = self:getZoom()
 			local ax = self.w * self.ax
 			local ay = self.h * self.ay
-			local size = 4
+			local size = 4 * zoom
 			
-			local w = size * sx
-			local h = size * sy
-			local x = (gx * sx - self.x * sx) + ax
-			local y = (gy * sy - self.y * sy) + ay
-			self.__debugMesh:setVertex(17, x-w,y-h)
-			self.__debugMesh:setVertex(18, x+w,y-h)
-			self.__debugMesh:setVertex(19, x+w,y+h)
-			self.__debugMesh:setVertex(20, x-w,y+h)
+			local x = (gx * zoom - self.x * zoom) + ax
+			local y = (gy * zoom - self.y * zoom) + ay
+			if self.shapeType == "rectangle" then
+				self.__debugRMesh:setVertex(17, x-size,y-size)
+				self.__debugRMesh:setVertex(18, x+size,y-size)
+				self.__debugRMesh:setVertex(19, x+size,y+size)
+				self.__debugRMesh:setVertex(20, x-size,y+size)
+			elseif self.shapeType == "circle" then
+				self.__debugCMesh:setVertex(1, x-size,y-size)
+				self.__debugCMesh:setVertex(2, x+size,y-size)
+				self.__debugCMesh:setVertex(3, x+size,y+size)
+				self.__debugCMesh:setVertex(4, x-size,y+size)
+			end
 		else
 			self:debugMeshUpdate()
 		end
@@ -174,89 +294,124 @@ end
 ---------------------------------------------------
 ----------------- RESIZE LISTENER -----------------
 ---------------------------------------------------
+-- set camera size to window size
+function GCam:setAutoSize(flag)
+	if flag then 
+		self:addEventListener(Event.APPLICATION_RESIZE, self.appResize, self)
+		self:appResize()
+	elseif self:hasEventListener(Event.APPLICATION_RESIZE) then
+		self:removeEventListener(Event.APPLICATION_RESIZE, self.appResize, self)
+	end
+end
+--
 function GCam:appResize()
-	local minX,minY,maxX,maxY = app:getLogicalBounds()
+	local minX,minY,maxX,maxY = application:getLogicalBounds()
 	self.w = maxX+minX
 	self.h = maxY+minY
 	self.matrix:setPosition(self.w * self.ax,self.h * self.ay)
 	self.viewport:setMatrix(self.matrix)
 	
 	self:debugUpdate()
+	self:updateClip()
 end
 --
+---------------------------------------------------
+---------------------- SHAPES ---------------------
+---------------------------------------------------
+-- 
+function GCam:rectangle(dt,x,y)
+	local sw = self.softWidth  / 2
+	local sh = self.softHeight / 2
+	local dw = self.deadWidth  / 2
+	local dh = self.deadHeight / 2
+	
+	local dstX = self.x
+	local dstY = self.y
+	
+	-- X smoothing
+	if x > self.x + dw then -- out of dead zone on right side
+		local dx = x - self.x - dw
+		local fx = smoothOver(dt, self.smoothX, 0.99)
+		dstX = lerp(self.x, self.x + dx, fx)
+	elseif x < self.x - dw then  -- out of dead zone on left side
+		local dx = self.x - dw - x
+		local fx = smoothOver(dt, self.smoothX, 0.99)
+		dstX = lerp(self.x, self.x - dx, fx)
+	end
+	-- clamp to soft zone
+	dstX = clamp(dstX, x - sw,x + sw)
+	
+	-- Y smoothing
+	if y > self.y + dh then -- out of dead zone on bottom side
+		local dy = y - self.y - dh
+		local fy = smoothOver(dt, self.smoothY, 0.99)
+		dstY = lerp(self.y, self.y + dy, fy)
+	elseif y < self.y - dh then  -- out of dead zone on top side
+		local dy = self.y - dh - y
+		local fy = smoothOver(dt, self.smoothY, 0.99)
+		dstY = lerp(self.y, self.y - dy, fy)
+	end
+	-- clamp to soft zone
+	dstY = clamp(dstY, y - sh,y + sh)
+	
+	return dstX, dstY
+end
+-- 
+function GCam:circle(dt,x,y)
+	local dr = self.deadRadius
+	local sr = self.softRadius
+	
+	local dstX, dstY = self.x, self.y
+	
+	local d = distanceSq(self.x, self.y, x, y)
+	
+	if d > dr and d <= sr then -- out of dead zone on bottom side
+		local offset = d-dr		
+		local ang = angle(self.x, self.y, x, y)
+		local fx = smoothOver(dt, self.smoothX, 0.99)
+		local fy = smoothOver(dt, self.smoothY, 0.99)
+		dstX = lerp(self.x, self.x + cos(ang) * offset, fx)
+		dstY = lerp(self.y, self.y + sin(ang) * offset, fy)
+	elseif d > sr then
+		local ang = angle(self.x, self.y, x, y)
+		local offset = d-sr+120*dt
+		dstX = self.x + cos(ang) * offset
+		dstY = self.y + sin(ang) * offset
+	end
+	
+	return dstX, dstY
+end
+-- shapeType(string): function name
+--		can be "rectangle" or "circle"
+--		you can create custom shape by 
+--		adding a new method to a class
+--		then use its name as shapeType
+function GCam:setShape(shapeType)
+	self.shapeType = shapeType
+	self.shapeFunction = self[shapeType]
+	assert(self.shapeFunction ~= nil, "[GCam]: shape with name \""..shapeType.."\" does not exist")
+	assert(type(self.shapeFunction) == "function", "[GCam]: incorrect shape type. Must be\"function\", but was: "..type(shapeFunction))
+	-- DEBUG --
+	self:setDebug(self.__debug__)
+	self:debugUpdate()
+	self:debugUpdate(true, 0, 0)
+end
 ---------------------------------------------------
 ---------------------- UPDATE ---------------------
 ---------------------------------------------------
 function GCam:update(dt)
 	local obj = self.followObj
 	if obj then 
-		local x,y = obj:getPosition()
-		
-		local sw = (self.softWidth * self.w) / 2
-		local sh = (self.softHeight * self.h) / 2
-		local dw = (self.deadWidth * self.w) / 2
-		local dh = (self.deadHeight * self.h) / 2
-		
-		local dstX = self.x
-		local dstY = self.y
-		
-		-- X smoothing
-		if x > self.x + dw then -- out of dead zone on right side
-			local dx = x - self.x - dw
-			local fx = smoothOver(dt, self.smoothX, 0.99)
-			dstX = lerp(self.x, self.x + dx, fx)
-		elseif x < self.x - dw then  -- out of dead zone on left side
-			local dx = self.x - dw - x
-			local fx = smoothOver(dt, self.smoothX, 0.99)
-			dstX = lerp(self.x, self.x - dx, fx)
-		end
-		-- clamp to soft zone
-		dstX = clamp(dstX, x - sw,x + sw)
-		
-		
-		-- Y smoothing
-		if y > self.y + dh then -- out of dead zone on bottom side
-			local dy = y - self.y - dh
-			local fy = smoothOver(dt, self.smoothY, 0.99)
-			dstY = lerp(self.y, self.y + dy, fy)
-		elseif y < self.y - dh then  -- out of dead zone on top side
-			local dy = self.y - dh - y
-			local fy = smoothOver(dt, self.smoothY, 0.99)
-			dstY = lerp(self.y, self.y - dy, fy)
-		end
-		-- clamp to soft zone
-		dstY = clamp(dstY, y - sh,y + sh)
+		local x,y = obj:getPosition()		
+		local dstX, dstY = self:shapeFunction(dt,x,y)
 		
 		if self.x ~= dstX or self.y ~= dstY then 
-			self:setPosition(dstX,dstY)
+			self:goto(dstX,dstY)
 		end
 		
 		self:debugUpdate(true,x,y)
 	end
-	
-	if (self.shaking) then
-		self.shakeAmount = 1 <> (self.shakeAmount^0.9)
-		
-		self.shakeTime += dt
-		local noise = random() * self.shakeTime
-		
-		local shakeFactor = self.shakeAmplitude * log(self.shakeAmount)
-		local waveX = sin(noise * self.shakeFrequency)
-		local waveY = cos(noise * self.shakeFrequency)
-		
-		local dx = shakeFactor * waveX
-		local dy = shakeFactor * waveY
-		--self:move(dx, dy)
-		
-		self:rawSetPosition(self.x + dx, self.y + dy)
-		
-		self.shaking = not(self.shakeAmount <= 1.001)
-		if not self.shaking then 
-			self:resetShake()
-		end
-	end
-	
-	
+	--self:updateClip()
 end
 --
 ---------------------------------------------------
@@ -266,83 +421,100 @@ function GCam:setFollow(obj)
 	self.followObj = obj
 end
 --
----------------------------------------------------
--------------------- TRANSFORM --------------------
----------------------------------------------------
-function GCam:move(dx, dy)
-	self:setPosition(self.x + dx, self.y + dy)
-end
---
-function GCam:zoom(factor)
-	if self.factor + factor > 0 then 
-		self.factor += factor
-		self:setScale(self.factor)
-	end
-end
---
-function GCam:rotate(ang)
-	self.rotation += ang
-	self:setRotation(self.rotation)
+function GCam:setFollowOffset(x,y)
+	self.followOX = x
+	self.followOY = y
 end
 ---------------------------------------------------
 ---------------------- SHAKE ----------------------
 ---------------------------------------------------
-function GCam:shake() 
+-- duration (number): time is s.
+--	distance (number): maximum shake offset
+function GCam:shake(duration, distance)
 	self.shaking = true
-	self.shakeAmount += self.shakeGrowth
+	
+	self.shakeCount = 0
+	self.shakeDistance = distance or 100
+	self.shakeAmount = (duration*1000) // GCam.SHAKE_DELAY
+	
+	self.shakeTimer:reset()
+	self.shakeTimer:setRepeatCount(self.shakeAmount)
+	self.shakeTimer:start()
 end
 --
-function GCam:resetShake() 
+function GCam:shakeDone()
 	self.shaking = false
-	self.shakeAmount = 1
-	self.shakeTime = 0
+	self.shakeCount = 0
+	self:setPosition(0,0)
 end
 --
-function GCam:setShake(growth, amplitude, frequency)
-	self.shakeGrowth = growth
-	self.shakeAmplitude = amplitude or 10
-	self.shakeFrequency = frequency or 100
+function GCam:shakeUpdate()
+	self.shakeCount += 1
+	local amplitude = 1 - outExponential(self.shakeCount/self.shakeAmount)
+	local hd = self.shakeDistance / 2
+	local x = random(-hd,hd)*amplitude
+	local y = random(-hd,hd)*amplitude
+	self:setPosition(x, y)
 end
 --------------------------------------------------
 --------------------- ZONES ----------------------
 --------------------------------------------------
-function GCam:setSoftZone(w,h)
+--	Camera intepolate its position towards target
+-- w (number): soft zone width
+-- h (number): soft zone height
+function GCam:setSoftSize(w,h)
 	self.softWidth = w
+	self.softHeight = h or w
+	self:debugUpdate()
+end
+--
+function GCam:setSoftWidth(w)
+	self.softWidth = w
+	self:debugUpdate()
+end
+--
+function GCam:setSoftHeight(h)
 	self.softHeight = h
 	self:debugUpdate()
 end
---
-function GCam:setSoftZoneWidth(w)
-	self.softWidth = w
-	self:debugUpdate()
-end
---
-function GCam:setSoftZoneHeight(h)
-	self.softHeight = h
+-- r (number): soft zone radius (only if shape type is "circle")
+function GCam:setSoftRadius(r)
+	self.softRadius = r
 	self:debugUpdate()
 end
 --
 --
-function GCam:setDeadZone(w,h)
+--	Camera does not move in dead zone
+-- w (number): dead zone width
+-- h (number): dead zone height
+function GCam:setDeadSize(w,h)
 	self.deadWidth = w
+	self.deadHeight = h or w
+	self:debugUpdate()
+end
+--
+function GCam:setDeadWidth(w)
+	self.deadWidth = w
+	self:debugUpdate()
+end
+--
+function GCam:setDeadHeight(h)
 	self.deadHeight = h
 	self:debugUpdate()
 end
 --
-function GCam:setDeadZoneWidth(w)
-	self.deadWidth = w
-	self:debugUpdate()
-end
---
-function GCam:setDeadZoneHeight(h)
-	self.deadHeight = h
+function GCam:setDeadRadius(r)
+	self.deadRadius = r
 	self:debugUpdate()
 end
 --
 --
+-- Smooth factor
+--	x (number):
+--	y (number):
 function GCam:setSmooth(x,y)
 	self.smoothX = x
-	self.smoothY = y
+	self.smoothY = y or x
 end
 --
 function GCam:setSmoothX(x)
@@ -360,10 +532,11 @@ function GCam:updateBounds()
 	local x = clamp(self.x, self.leftBound, self.rightBound)
 	local y = clamp(self.y, self.topBound, self.bottomBound)
 	if x ~= self.x or y ~= self.y then 
-		self:setPosition(x,y)
+		self:goto(x,y)
 	end
 end
 --
+-- Camera can move only inside given bbox
 function GCam:setBounds(left, top, right, bottom)
 	self.leftBound = left or 0
 	self.topBound = top or 0
@@ -396,21 +569,36 @@ end
 function GCam:getBounds() 
 	return self.leftBound, self.topBound, self.rightBound, self.bottomBound
 end
---------------------------------------------------
--------------------- OVERRIDE --------------------
---------------------------------------------------
+---------------------------------------------------
+----------------- TRANSFORMATIONS -----------------
+---------------------------------------------------
+function GCam:move(dx, dy)
+	self:goto(self.x + dx, self.y + dy)
+end
+--
+function GCam:zoom(value)
+	local v = self.zoomFactor + value
+	if v > 0 then 
+		self:setZoom(v)
+	end
+end
+--
+function GCam:rotate(ang)
+	self.rotation += ang
+	self:setAngle(self.rotation)
+end
 
 ------------------------------------------
 ---------------- POSITION ----------------
 ------------------------------------------
-function GCam:rawSetPosition(x,y)
+function GCam:rawGoto(x,y)
 	x = clamp(x, self.leftBound, self.rightBound)
 	y = clamp(y, self.topBound, self.bottomBound)
 	self.matrix:setAnchorPosition(x,y)
 	self.viewport:setMatrix(self.matrix)	
 end
 --
-function GCam:setPosition(x,y)
+function GCam:goto(x,y)
 	x = clamp(x, self.leftBound, self.rightBound)
 	y = clamp(y, self.topBound, self.bottomBound)
 	
@@ -420,82 +608,53 @@ function GCam:setPosition(x,y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
-function GCam:setX(x)
+function GCam:gotoX(x)
 	x = clamp(x, self.leftBound, self.rightBound)
 	self.x = x
 	self.matrix:setAnchorPosition(x,self.y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
-function GCam:setY(y)
+function GCam:gotoY(y)
 	y = clamp(y, self.topBound, self.bottomBound)
 	self.y = y
 	self.matrix:setAnchorPosition(self.x,y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
---
-function GCam:getPosition()
-	return self.x, self.y
-end
---
-function GCam:getX()
-	return self.x
-end
---
-function GCam:getY()
-	return self.y
-end
 ------------------------------------------
------------------ SCALE ------------------
+------------------ ZOOM ------------------
 ------------------------------------------
-function GCam:setScale(scaleX, scaleY)
-	self.matrix:setScale(scaleX, scaleY or scaleX, 1)
-	self.viewport:setMatrix(self.matrix)
-	self:debugUpdate()
-end
---
-function GCam:setScaleX(scaleX)
-	self.matrix:setScaleX(scaleX)
-	self.viewport:setMatrix(self.matrix)
-	self:debugUpdate()
-end
---
-function GCam:setScaleY(scaleY)
-	self.matrix:setScaleY(scaleY)
+function GCam:setZoom(zoom)
+	self.zoomFactor = zoom
+	self.matrix:setScale(zoom, zoom, 1)
 	self.viewport:setMatrix(self.matrix)
 	self:debugUpdate()
 end
 --
 --
-function GCam:getScale()
-	return self.matrix:getScale()
+function GCam:getZoom()
+	return self.zoomFactor
 end
 --
-function GCam:getScaleX()
-	return self.matrix:getScaleX()
-end
---
-function GCam:getScaleY()
-	return self.matrix:getScaleY()
-end
 ------------------------------------------
 ---------------- ROTATION ----------------
 ------------------------------------------
-function GCam:setRotation(angle)
+function GCam:setAngle(angle)
+	self.rotation = angle
 	self.matrix:setRotationZ(angle)
 	self.viewport:setMatrix(self.matrix)
 	self:debugUpdate()
 end
 --
 --
-function GCam:getRotation()
+function GCam:getAngle()
 	return self.matrix:getRotationZ()
 end
 ------------------------------------------
-------------- ANCHOR POSITION ------------
+-------------- ANCHOR POINT --------------
 ------------------------------------------
-function GCam:setAnchorPosition(anchorX, anchorY)
+function GCam:setAnchor(anchorX, anchorY)
 	self.ax = anchorX
 	self.ay = anchorY
 	self.matrix:setPosition(self.w * anchorX,self.h * anchorY)
@@ -518,20 +677,23 @@ function GCam:setAnchorY(anchorY)
 end
 --
 --
-function GCam:getAnchorPosition()
+function GCam:getCamAnchorPoint()
 	return self.ax, self.ay
 end
 ------------------------------------------
 ------------------ SIZE ------------------
 ------------------------------------------
-function GCam:getSize()
-	return self.w, self.h
+function GCam:updateClip()
+	local ax = self.w * self.ax
+	local ay = self.h * self.ay
+	--self.viewport:setClip(self.x-ax,self.y-ay,self.w,self.h)
 end
 --
-function GCam:getWidth()
-	return self.w
+function GCam:setSize(w,h)
+	self.w = w
+	self.h = h
+	
+	self:debugUpdate()
+	self:updateClip()
 end
 --
-function GCam:getHeight()
-	return self.h
-end
