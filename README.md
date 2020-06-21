@@ -4,8 +4,8 @@ A simple 2D camera for Gideros.
 # Features
 
 * 2 shape types
- * rectangle
- * circle
+** rectangle
+** circle
 * Dead zone
 * Soft zone
 * Shaking
