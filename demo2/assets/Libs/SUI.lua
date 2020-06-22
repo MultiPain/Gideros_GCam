@@ -589,8 +589,8 @@ function HSlider:setValue(value, throwCallback)
 	self.value = clamp(value, self.min, self.max)
 	if (self.int) then
 		self.value = self.value // 1
-		actualX = map(self.value, self.min, self.max, self.minX + self.kWL, self.maxX - self.kWR)
 	end
+	actualX = map(self.value, self.min, self.max, self.minX + self.kWL, self.maxX - self.kWR)
 	self.knob:setX(actualX)
 	Slider.setValue(self, value, throwCallback)
 end
@@ -628,8 +628,8 @@ function VSlider:setValue(value, throwCallback)
 	self.value = clamp(value, self.min, self.max)
 	if (self.int) then
 		self.value = self.value // 1
-		actualY = map(self.value, self.min, self.max, self.minY + self.kHT, self.maxY - self.kHB)
 	end
+	actualY = map(self.value, self.min, self.max, self.minY + self.kHT, self.maxY - self.kHB)
 	self.knob:setY(actualY)
 	Slider.setValue(self, value, throwCallback)
 end

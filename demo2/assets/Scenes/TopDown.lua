@@ -75,38 +75,81 @@ X or Y (gamepad) - set camera shape to "rectangle"]])
 		):addValueText("Soft H")
 	)
 	g:hSeparator()
-	g:add(
-		self.ui:hSlider(0,10,self.cam.smoothX,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
-			function(obj,value,state) 
-				self.cam:setSmoothX(value)
-			end
-		):addValueText("Smooth X")
-	)
-	g:add(
-		self.ui:hSlider(0,10,self.cam.smoothY,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
-			function(obj,value,state) 
-				self.cam:setSmoothY(value)
-			end
-		):addValueText("Smooth Y")
-	)
-	g:hSeparator()
 	local l2 = self.ui:label(150,10,"Circle shape")
 	l2:setTextColor(0xffffff)
 	g:add(l2)
 	g:add(
 		self.ui:hSlider(0,600,self.cam.deadRadius,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
-			function(obj,value,state) 
-				self.cam:setDeadRadius(value)
-			end
-		):addValueText("Dead R")
-	)
+		function(obj,value,state) 
+			self.cam:setDeadRadius(value)
+		end
+	):addValueText("Dead R"))
 	g:add(
 		self.ui:hSlider(0,600,self.cam.softRadius,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam:setSoftRadius(value)
+		end
+	):addValueText("Soft R"))
+	g:hSeparator()
+	g:add(
+		self.ui:hSlider(0,10,self.cam.smoothX,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam:setSmoothX(value)
+		end
+	):addValueText("Smooth X"),"smx")
+	g:add(
+		self.ui:hSlider(0,10,self.cam.smoothY,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam:setSmoothY(value)
+		end
+	):addValueText("Smooth Y"),"smy")
+	g:add(
+		self.ui:button({Pixel.new(0x909090,1,150,16),Pixel.new(0xf0f0f0,1,150,16)}, 
+		function(obj) 
+			g:getByID("smx"):setValue(0.9,true)
+			g:getByID("smy"):setValue(0.9,true)
+		end
+	):addText("Reset"))
+	g:hSeparator()
+	g:add(
+		self.ui:hSlider(0,1,self.cam.ax,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam:setAnchorX(value)
+		end
+	):addValueText("Anchor X"), "ay")
+	g:add(
+		self.ui:hSlider(0,1,self.cam.ay,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam:setAnchorY(value)
+		end
+	):addValueText("Anchor Y"), "ax")
+	g:add(
+		self.ui:button({Pixel.new(0x909090,1,150,16),Pixel.new(0xf0f0f0,1,150,16)}, 
+		function(obj) 
+			g:getByID("ax"):setValue(0.5,true)
+			g:getByID("ay"):setValue(0.5,true)
+		end
+	):addText("Reset"))
+	g:hSeparator()
+	g:add(
+		self.ui:hSlider(-600,600,self.cam.followOX,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
 			function(obj,value,state) 
-				self.cam:setSoftRadius(value)
+				self.cam.followOX = value
 			end
-		):addValueText("Soft R")
-	)
+		):addValueText("Offset X"), "ox")
+	g:add(
+		self.ui:hSlider(-600,600,self.cam.followOY,false,{Pixel.new(0x404040,1,150,16),Pixel.new(0xffffff, 1, 16, 16)}, 
+		function(obj,value,state) 
+			self.cam.followOY = value
+		end
+	):addValueText("Offset Y"), "oy")
+	g:add(
+		self.ui:button({Pixel.new(0x909090,1,150,16),Pixel.new(0xf0f0f0,1,150,16)}, 
+		function(obj) 
+			g:getByID("ox"):setValue(0,true)
+			g:getByID("oy"):setValue(0,true)
+		end
+	):addText("Reset"))
 	g:hSeparator()
 	g:add(
 		self.ui:checkBox("", self.cam.__debug__ and 1 or 0, {Pixel.new(0x404040,1,150,16),Pixel.new(0xf0f0f0,1,150,16)},
@@ -114,6 +157,7 @@ X or Y (gamepad) - set camera shape to "rectangle"]])
 			self.cam:setDebug(state == 1)
 		end
 	):addText("Debug mode"), "debug")
+	
 	g:add(
 		self.ui:checkBox("shapeType", self.cam.shapeType == "circle" and 1 or 0, {Pixel.new(0x404040,1,150,16),Pixel.new(0xf0f0f0,1,150,16)},
 		function(obj,state) 
