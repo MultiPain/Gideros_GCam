@@ -2,7 +2,6 @@ SideView = Core.class(Sprite)
 
 function SideView:init()
 	self.keys = {}
-	self.joystickVec = vec2.new()
 	self.layers = Sprite.new()
 
 	self.player = Player2.new(32,32)
