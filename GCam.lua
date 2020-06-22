@@ -68,11 +68,13 @@ GCam.SHAKE_DELAY = 10
 
 function GCam:init(content, ax, ay)
 	assert(content ~= stage, "bad argument #1 (сontent should be different from the 'stage')")
-	self.content = content
 	
 	self.viewport = Viewport.new()
 	self.viewport:setContent(content)
-	self:addChild(self.viewport)
+	
+	self.content = Sprite.new()
+	self.content:addChild(self.viewport)
+	self:addChild(self.content)
 	
 	self.matrix = Matrix.new()
 	self.viewport:setMatrix(self.matrix)
@@ -112,11 +114,11 @@ function GCam:init(content, ax, ay)
 	-- Dead zone
 	self.deadWidth = 50
 	self.deadHeight = 50
-	self.deadRadius = 50
+	self.deadRadius = 25
 	-- Soft zone
 	self.softWidth = 150
 	self.softHeight = 150
-	self.softRadius = 150
+	self.softRadius = 75
 	
 	---------------------------------------
 	------------- debug stuff -------------
@@ -403,6 +405,10 @@ function GCam:update(dt)
 	local obj = self.followObj
 	if obj then 
 		local x,y = obj:getPosition()		
+		
+		x += self.followOX
+		y += self.followOY
+		
 		local dstX, dstY = self:shapeFunction(dt,x,y)
 		
 		if self.x ~= dstX or self.y ~= dstY then 
@@ -411,7 +417,7 @@ function GCam:update(dt)
 		
 		self:debugUpdate(true,x,y)
 	end
-	--self:updateClip()
+	self:updateClip()
 end
 --
 ---------------------------------------------------
@@ -445,7 +451,7 @@ end
 function GCam:shakeDone()
 	self.shaking = false
 	self.shakeCount = 0
-	self:setPosition(0,0)
+	self.content:setPosition(0,0)
 end
 --
 function GCam:shakeUpdate()
@@ -454,7 +460,7 @@ function GCam:shakeUpdate()
 	local hd = self.shakeDistance / 2
 	local x = random(-hd,hd)*amplitude
 	local y = random(-hd,hd)*amplitude
-	self:setPosition(x, y)
+	self.content:setPosition(x, y)
 end
 --------------------------------------------------
 --------------------- ZONES ----------------------
@@ -677,7 +683,7 @@ function GCam:setAnchorY(anchorY)
 end
 --
 --
-function GCam:getCamAnchorPoint()
+function GCam:getAnchor()
 	return self.ax, self.ay
 end
 ------------------------------------------
@@ -686,7 +692,8 @@ end
 function GCam:updateClip()
 	local ax = self.w * self.ax
 	local ay = self.h * self.ay
-	--self.viewport:setClip(self.x-ax,self.y-ay,self.w,self.h)
+	--self.viewport:setClip(self.x-ax,self.y-ay,self.w,self.h+ay)
+	--self.viewport:setAnchorPosition(self.x,self.y)
 end
 --
 function GCam:setSize(w,h)
