@@ -534,15 +534,23 @@ end
 --------------------------------------------------
 --------------------- BOUNDS ---------------------
 --------------------------------------------------
+function GCam:checkBounds(x,y)
+	local offX = self.w * self.ax
+	local offY = self.h * self.ay
+	local newX = clamp(x, self.leftBound + offX, self.rightBound - offX)
+	local newY = clamp(y, self.topBound + offY, self.bottomBound - offY)
+	return newX,newY
+end
+--
 function GCam:updateBounds()
-	local x = clamp(self.x, self.leftBound, self.rightBound)
-	local y = clamp(self.y, self.topBound, self.bottomBound)
+	local x,y = self:checkBounds(self.x, self.y)
 	if x ~= self.x or y ~= self.y then 
 		self:goto(x,y)
 	end
 end
 --
 -- Camera can move only inside given bbox
+
 function GCam:setBounds(left, top, right, bottom)
 	self.leftBound = left or 0
 	self.topBound = top or 0
@@ -605,11 +613,8 @@ function GCam:rawGoto(x,y)
 end
 --
 function GCam:goto(x,y)
-	x = clamp(x, self.leftBound, self.rightBound)
-	y = clamp(y, self.topBound, self.bottomBound)
+	self.x, self.y = self:checkBounds(x,y)
 	
-	self.x = x
-	self.y = y
 	self.matrix:setAnchorPosition(x,y)
 	self.viewport:setMatrix(self.matrix)
 end
