@@ -615,21 +615,21 @@ end
 function GCam:goto(x,y)
 	self.x, self.y = self:checkBounds(x,y)
 	
-	self.matrix:setAnchorPosition(x,y)
+	self.matrix:setAnchorPosition(self.x, self.y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
 function GCam:gotoX(x)
 	self.x, self.y = self:checkBounds(x, self.y)
 	
-	self.matrix:setAnchorPosition(newX, newY)
+	self.matrix:setAnchorPosition(self.x, self.y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
 function GCam:gotoY(y)
 	self.x, self.y = self:checkBounds(self.x, y)
 	
-	self.matrix:setAnchorPosition(self.x,y)
+	self.matrix:setAnchorPosition(self.x, self.y)
 	self.viewport:setMatrix(self.matrix)
 end
 --
