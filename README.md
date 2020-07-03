@@ -72,7 +72,7 @@ Dead zone:
 Camera does not move in this zone
 ```lua
 camera:setDeadSize(w, h) -- dead zone size
-camera:setDeadRadius(w, h) -- dead zone radius (only for "circle" shape)
+camera:setDeadRadius(r) -- dead zone radius (only for "circle" shape)
 ```
 
 Soft zone:
