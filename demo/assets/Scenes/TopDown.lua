@@ -259,57 +259,6 @@ function TopDown:checkInputs()
 	end
 end
 --
---[[
-function TopDown:addInput(e)
-	
-	self:addEventListener("enterFrame", self.enterFrame, self)
-	self:addEventListener("keyDown", self.keyDown, self)
-	self:addEventListener("keyUp", self.keyUp, self)
-
-	pcall(function() require "controller" end)
-
-	if controller then 
-		controller:addEventListener(Event.LEFT_JOYSTICK, function(e)
-			if e.strength > 0.5 then 
-				self.player:setMoveVec(e)
-			end
-		end)
-		
-		controller:addEventListener(Event.KEY_DOWN, function(e)
-			local k=e.keyCode
-			if k==KeyCode.BUTTON_BACK then self.cam:setZoom(1) self.cam:setAngle(0)
-			
-			elseif k==KeyCode.BUTTON_B then self.cam:shake(2)
-			elseif k==KeyCode.DPAD_UP then self.keys[KeyCode.W] = true
-			elseif k==KeyCode.DPAD_DOWN then self.keys[KeyCode.S] = true
-			elseif k==KeyCode.DPAD_LEFT then self.keys[KeyCode.A] = true
-			elseif k==KeyCode.DPAD_RIGHT then self.keys[KeyCode.D] = true
-			elseif k==KeyCode.BUTTON_L1 then self.keys["L_BTN"] = true
-			elseif k==KeyCode.BUTTON_R1 then self.keys["R_BTN"] = true
-			end
-		end)
-		
-		controller:addEventListener(Event.KEY_UP, function(e)
-			local k=e.keyCode
-			if k==KeyCode.BUTTON_L1 then self.keys["L_BTN"] = false
-			elseif k==KeyCode.BUTTON_R1 then self.keys["R_BTN"] = false
-			elseif k==KeyCode.DPAD_UP then self.keys[KeyCode.W] = false
-			elseif k==KeyCode.DPAD_DOWN then self.keys[KeyCode.S] = false
-			elseif k==KeyCode.DPAD_LEFT then self.keys[KeyCode.A] = false
-			elseif k==KeyCode.DPAD_RIGHT then self.keys[KeyCode.D] = false
-			end
-		end)
-		
-		controller:addEventListener(Event.LEFT_TRIGGER, function(e)
-			self.keys["L_TRIGGER"] = not (e.strength == 0)
-		end)
-		
-		controller:addEventListener(Event.RIGHT_TRIGGER, function(e)
-			self.keys["R_TRIGGER"] = not (e.strength == 0)
-		end)
-	end
-end
---]]
 function TopDown:onDrawUI(dt)
 	self:checkInputs()
 	self:drawUI(dt)
