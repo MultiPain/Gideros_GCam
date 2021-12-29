@@ -103,7 +103,7 @@ camera:switchDebug() -- turn on/off
 ```
 
 Prediction:
-```
+```lua
 camera:setPredictMode(mode) -- mode: true/false
 camera:setPrediction(num) -- number betwwen 0 and 1
 camera:lockPredictionX() -- no prediction on X axis
