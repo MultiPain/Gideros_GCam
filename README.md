@@ -101,3 +101,14 @@ camera:setDebug(flag)
 -- or
 camera:switchDebug() -- turn on/off
 ```
+
+Prediction:
+```
+camera:setPredictMode(mode) -- mode: true/false
+camera:setPrediction(num) -- number betwwen 0 and 1
+camera:lockPredictionX() -- no prediction on X axis
+camera:lockPredictionY() -- no prediction on X axis
+camera:setLockPredictionX(flag) -- disable/enable prediction on X axis
+camera:setLockPredictionY(flag) -- disable/enable prediction on X axis
+camera:setPredictionSmoothing(num) -- smooth prediction
+```
