@@ -1,18 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
 <project>
- <properties autorotation="0" winrt_package="com.yourdomain.yourapp" win_domain="giderosmobile.com" encryptAssets="0" winrt_org="GiderosMobile" logicalHeight="480" mouseTouchOrder="0" version_code="1" version="1.0" orientation="1" mainluaOnly="0" html5_crash="" html5_mem="256" mouseToTouch="1" backgroundColor="#ffffff" html5_symbols="0" splash_h_image="" disableSplash="0" osx_domain="giderosmobile.com" html5_wasm="0" html5_fbinstant="0" architecture="0" osx_bundle="com.yourdomain." html5_host="" osx_installerId="" touchToMouse="1" tv_icon="" retinaDisplay="0" scaleMode="0" android_template="0" html5_fbload="100" app_name="" logicalWidth="320" build_number="1" windowHeight="0" splashScaleMode="0" osx_signingId="" osx_category="5" win_org="GiderosMobile" osx_org="GiderosMobile" exportMode="0" vsync="0" fps="60" iosDevice="0" html5_pack="0" ios_bundle="com.yourdomain." splash_v_image="" packageName="com.yourdomain.yourapp" encryptCode="0" windowWidth="0" app_icon="">
+ <properties winrt_org="GiderosMobile" encryptAssets="0" fps="60" html5_mem="256" html5_wasm="0" html5_fbload="100" app_icon="" logicalHeight="1920" touchToMouse="1" vsync="0" version="1.0" html5_fbinstant="0" version_code="1" win_domain="giderosmobile.com" app_name="" mouseToTouch="1" backgroundColor="#ffffff" osx_domain="giderosmobile.com" iosDevice="0" architecture="0" html5_pwa="0" autorotation="0" html5_symbols="0" tv_icon="" disableSplash="0" mouseTouchOrder="0" orientation="1" windowWidth="0" splash_v_image="" splash_h_image="" atv_bundle="com.yourdomain.yourapp-atv" macos_bundle="com.yourdomain.yourapp-macos" mainluaOnly="0" osx_category="5" retinaDisplay="0" osx_signingId="" winrt_package="com.yourdomain.yourapp" html5_crash="" html5_pack="0" build_number="1" macos_category="5" scaleMode="3" logicalWidth="1080" ios_bundle="com.yourdomain." encryptCode="0" html5_host="" osx_org="GiderosMobile" osx_bundle="com.yourdomain." splashScaleMode="0" win_org="GiderosMobile" windowHeight="0" osx_installerId="" exportMode="0">
   <imageScales/>
-  <plugins/>
+  <plugins>
+   <plugin enabled="1" name="Easing"/>
+   <plugin enabled="1" name="SceneManager"/>
+  </plugins>
   <exports/>
  </properties>
  <folder name="Libs">
-  <file name="assets/Libs/GCam.lua"/>
+  <file source="../GCam.lua"/>
+  <file name="assets/Libs/SUI.lua"/>
   <file name="assets/Libs/vec2.lua"/>
  </folder>
+ <folder name="Objects">
+  <file name="assets/Objects/Player.lua"/>
+  <file name="assets/Objects/Player2.lua"/>
+ </folder>
  <folder name="Scenes">
+  <file name="assets/Scenes/BaseScene.lua"/>
+  <file name="assets/Scenes/Selection.lua"/>
+  <file name="assets/Scenes/SideView.lua"/>
   <file name="assets/Scenes/TopDown.lua"/>
  </folder>
  <file name="assets/Body.lua"/>
- <file name="assets/Player.lua"/>
  <file name="assets/bg.png"/>
  <file name="assets/main.lua"/>
+ <dependency to="assets/Scenes/BaseScene.lua" from="assets/Scenes/SideView.lua"/>
+ <dependency to="assets/Scenes/BaseScene.lua" from="assets/Scenes/TopDown.lua"/>
 </project>

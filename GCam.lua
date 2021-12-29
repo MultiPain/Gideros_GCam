@@ -1,5 +1,7 @@
 local atan2,sqrt,cos,sin,log,random = math.atan2,math.sqrt,math.cos,math.sin,math.log,math.random
 local PI = math.pi
+local INF = math.huge
+local abs = math.abs
 
 -- ref: 
 -- https://www.gamedev.net/tutorials/programming/general-and-gameplay-programming/a-brief-introduction-to-lerp-r4954/#:~:text=Linear%20interpolation%20(sometimes%20called%20'lerp,0..1%5D%20range.
@@ -93,10 +95,10 @@ function GCam:init(content, ax, ay)
 	self.followOY = 0
 	
 	-- Bounds
-	self.leftBound = -1000000
-	self.rightBound = 1000000
-	self.topBound = -1000000
-	self.bottomBound = 1000000
+	self.leftBound   = -INF
+	self.rightBound  = INF
+	self.topBound    = -INF
+	self.bottomBound = INF
 	
 	-- Shaker
 	self.shakeTimer = Timer.new(GCam.SHAKE_DELAY, 1)
@@ -107,16 +109,29 @@ function GCam:init(content, ax, ay)
 	self.shakeTimer:addEventListener("timer", self.shakeUpdate, self)
 	self.shakeTimer:stop()
 	
+	-- prediction
+	self.predictMode = false
+	self.predictSmooth = 0
+	self.prediction = 0.5
+	self.lockPredX = false
+	self.lockPredY = false
+	-- to detect object velocity
+	self.__prevPosX = 0
+	self.__prevPosY = 0
+	self.__predictOffsetX = 0
+	self.__predictOffsetY = 0
+		
+	
 	-- Follow
 	-- 0 - instant move
 	self.smoothX = 0.9
 	self.smoothY = 0.9
 	-- Dead zone
-	self.deadWidth = 50
+	self.deadWidth  = 50
 	self.deadHeight = 50
 	self.deadRadius = 25
 	-- Soft zone
-	self.softWidth = 150
+	self.softWidth  = 150
 	self.softHeight = 150
 	self.softRadius = 75
 	
@@ -332,29 +347,27 @@ function GCam:rectangle(dt,x,y)
 	
 	-- X smoothing
 	if x > self.x + dw then -- out of dead zone on right side
-		local dx = x - self.x - dw
-		local fx = smoothOver(dt, self.smoothX, 0.99)
-		dstX = lerp(self.x, self.x + dx, fx)
+		local t = smoothOver(dt, self.smoothX, 0.99)
+		local newX = lerp(self.x, x - dw, t)
+		dstX = clamp(newX, x - sw, x + sw)
 	elseif x < self.x - dw then  -- out of dead zone on left side
-		local dx = self.x - dw - x
-		local fx = smoothOver(dt, self.smoothX, 0.99)
-		dstX = lerp(self.x, self.x - dx, fx)
+		local t = smoothOver(dt, self.smoothX, 0.99)
+		local newX = lerp(self.x, x + dw, t)
+		dstX = clamp(newX, x - sw, x + sw)
 	end
 	-- clamp to soft zone
-	dstX = clamp(dstX, x - sw,x + sw)
 	
 	-- Y smoothing
 	if y > self.y + dh then -- out of dead zone on bottom side
-		local dy = y - self.y - dh
-		local fy = smoothOver(dt, self.smoothY, 0.99)
-		dstY = lerp(self.y, self.y + dy, fy)
+		local t = smoothOver(dt, self.smoothY, 0.99)
+		local newY = lerp(self.y, y - dh, t)
+		dstY = clamp(newY, y - sh,y + sh)
 	elseif y < self.y - dh then  -- out of dead zone on top side
-		local dy = self.y - dh - y
-		local fy = smoothOver(dt, self.smoothY, 0.99)
-		dstY = lerp(self.y, self.y - dy, fy)
+		local t = smoothOver(dt, self.smoothY, 0.99)
+		local newY = lerp(self.y, y + dh, t)
+		dstY = clamp(newY, y - sh,y + sh)
 	end
 	-- clamp to soft zone
-	dstY = clamp(dstY, y - sh,y + sh)
 	
 	return dstX, dstY
 end
@@ -398,37 +411,116 @@ function GCam:setShape(shapeType)
 	self:debugUpdate()
 	self:debugUpdate(true, 0, 0)
 end
+--
+function GCam:getShape()
+	return self.shapeFunction
+end
+--
+function GCam:getShapeType()
+	return self.shapeType
+end
 ---------------------------------------------------
 ---------------------- UPDATE ---------------------
 ---------------------------------------------------
 function GCam:update(dt)
 	local obj = self.followObj
 	if obj then 
-		local x,y = obj:getPosition()		
+		local x,y = obj:getPosition()
 		
-		x += self.followOX
-		y += self.followOY
+		if (self.predictMode) then 
+			if (dt == 0) then dt = 0.00001 end
+			local dx = (x - self.__prevPosX) / dt * self.prediction
+			local dy = (y - self.__prevPosY) / dt * self.prediction
+			
+			if (self.predictSmooth > 0) then 
+				local t = smoothOver(dt, self.predictSmooth, 0.99)--1 - self.predictSmooth ^ dt
+				self.__predictOffsetX = lerp(self.__predictOffsetX, dx, t)
+				self.__predictOffsetY = lerp(self.__predictOffsetY, dy, t)
+			else
+				self.__predictOffsetX = dx
+				self.__predictOffsetY = dy
+			end
+			
+			if (self.lockPredX) then 
+				self.__predictOffsetX = 0
+			end
+			
+			if (self.lockPredY) then 
+				self.__predictOffsetY = 0
+			end
+		end
 		
-		local dstX, dstY = self:shapeFunction(dt,x,y)
+		self.__prevPosX = x
+		self.__prevPosY = y
+		
+		x += self.followOX + self.__predictOffsetX
+		y += self.followOY + self.__predictOffsetY
+		
+		local dstX, dstY = self:shapeFunction(dt, x, y)
 		
 		if self.x ~= dstX or self.y ~= dstY then 
 			self:goto(dstX,dstY)
 		end
 		
 		self:debugUpdate(true,x,y)
+		
 	end
 	self:updateClip()
+end
+--
+---------------------------------------------------
+------------------- PREDICTION --------------------
+---------------------------------------------------
+function GCam:setPredictMode(mode)
+	self.predictMode = mode
+end
+--
+function GCam:setPrediction(num)
+	self.prediction = num
+end
+--
+function GCam:lockPredictionX()
+	self.lockPredX = true
+end
+--
+function GCam:lockPredictionY()
+	self.lockPredY = true
+end
+--
+function GCam:setLockPredictionX(flag)
+	self.lockPredX = flag
+end
+--
+function GCam:setLockPredictionY(flag)
+	self.lockPredY = flag
+end
+--
+function GCam:setPredictionSmoothing(num)
+	self.predictSmooth = num
 end
 --
 ---------------------------------------------------
 --------------------- FOLLOW ----------------------
 ---------------------------------------------------
 function GCam:setFollow(obj)
-	self.followObj = obj
+	if (obj ~= nil) then 
+		assert(obj.getPosition and obj:getClass() == 'Sprite', "Invalid follow object!")
+		self.__prevPosX, self.__prevPosY = obj:getPosition()	
+	end
+	
+	self.followObj = obj	
 end
 --
 function GCam:setFollowOffset(x,y)
 	self.followOX = x
+	self.followOY = y
+end
+--
+function GCam:setFollowOffsetX(x)
+	self.followOX = x
+end
+--
+function GCam:setFollowOffsetY(y)
 	self.followOY = y
 end
 ---------------------------------------------------

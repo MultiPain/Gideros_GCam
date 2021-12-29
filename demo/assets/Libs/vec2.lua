@@ -13,13 +13,13 @@ function vec2:__sub(vec) return vec2.new(self.x - vec.x, self.y - vec.y) end
 function vec2.__div(v1,v2)
 	local t1,t2 = type(v1), type(v2)
 	if t1 == "number" and t2 == "table" then 
-		assert(v2.x ~= 0 and v2.y ~= 0, "[vec2]: division by 0!")
+		assert(v2.x ~= 0 and v2.y ~= 0, "[vec2]: division by 0! (vector)")
 		return vec2.new(v1 / v2.x, v1 / v2.y) 
 	elseif t1 == "table" and t2 == "number" then 
-		assert(v2 ~= 0, "[vec2]: division by 0!")
+		assert(v2 ~= 0, "[vec2]: division by 0! (value)")
 		return vec2.new(v1.x / v2, v1.y / v2) 
 	else
-		assert(v2.x ~= 0 and v2.y ~= 0, "[vec2]: division by 0!")
+		assert(v2.x ~= 0 and v2.y ~= 0, "[vec2]: division by 0! (vector)")
 		return vec2.new(v1.x / v2.x, v1.y / v2.y) 
 	end 
 end
@@ -78,7 +78,15 @@ function vec2:limit(len)
 		self.y *= len
 	end
 end
+function vec2.lerp(a, b, t) 
+	local tm = 1 - t
+	local x = tm * a.x + t * b.x
+	local y = tm * a.y + t * b.y
+	return vec2.new(x, y)
+end
 function vec2:unpack() return self.x, self.y end
+function vec2:set(x, y) self.x = x self.y = y return self end
+function vec2:setFrom(other) self.x = other.x self.y = other.y return self end
 vec2.ZERO = vec2.new()
 vec2.LEFT = vec2.new(-1,0)
 vec2.RIGHT = vec2.new(1,0)
