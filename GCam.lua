@@ -461,8 +461,9 @@ function GCam:update(dt)
 		if self.x ~= dstX or self.y ~= dstY then 
 			self:goto(dstX,dstY)
 		end
-		
-		self:debugUpdate(true,x,y)
+
+		-- debug
+		if self.__debug__ then self:debugUpdate(true,x,y) end
 		
 	end
 	self:updateClip()
